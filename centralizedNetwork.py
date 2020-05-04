@@ -92,8 +92,9 @@ def find_average(this_dict):
     total = 0
     counter = 0
     for n in this_dict:
-        total = total + this_dict[n]
-        counter = counter + 1
+        if n not in byzantine_set:
+            total = total + this_dict[n]
+            counter = counter + 1
 
     return total / counter
 
@@ -166,10 +167,10 @@ for x in range(50):
     for i in range(n):
         ### CORRUPT NODES
         if i in byzantine_set:
-            derivatives["V_dW1i" + str(i)] = 1
-            derivatives["V_db1i" + str(i)] = 1
-            derivatives["V_dW2i" + str(i)] = -1
-            derivatives["V_db2i" + str(i)] = -1
+            derivatives["V_dW1i" + str(i)].fill(1)
+            derivatives["V_db1i" + str(i)].fill(1)
+            derivatives["V_dW2i" + str(i)].fill(-1)
+            derivatives["V_db2i" + str(i)].fill(-1)
         ### HONEST NODES
         else:
             cacheList[i] = feed_forward(xTrainList[i], params)

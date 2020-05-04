@@ -16,9 +16,9 @@ n = 100  # NUMBER OF NODES
 byzantine_set = []
 
 adjList = {}
-for i in n:
+for i in range(n):
     adjList["Node" + str(i)] = []
-    for j in n:
+    for j in range(n):
         if i != j:
             adjList["Node" + str(i)].append(j)
 
@@ -98,8 +98,9 @@ def find_average(this_dict):
     total = 0
     counter = 0
     for n in this_dict:
-        total = total + this_dict[n]
-        counter = counter + 1
+        if n not in byzantine_set:
+            total = total + this_dict[n]
+            counter = counter + 1
 
     return total / counter
 
@@ -171,11 +172,11 @@ for x in range(50):
     for i in range(n):
         ### CORRUPT NODES
         if i in byzantine_set:
-            derivatives["V_dW1i" + str(i)] = 5
-            derivatives["V_db1i" + str(i)] = 5
-            derivatives["V_dW2i" + str(i)] = -5
-            derivatives["V_db2i" + str(i)] = -5
-        ###HONEST NODES
+            derivatives["V_dW1i" + str(i)].fill(5)
+            derivatives["V_db1i" + str(i)].fill(5)
+            derivatives["V_dW2i" + str(i)].fill(-5)
+            derivatives["V_db2i" + str(i)].fill(-5)
+        ### HONEST NODES
         else:
             cacheList[i] = feed_forward(xTrainList[i], params, i)
             grads = back_propagate(xTrainList[i], yTrainList[i], params, cacheList[i], i)
@@ -206,17 +207,20 @@ print("Done.")
 
 ### post-analysis ###
 accuracy = 0
+counter = 0
 for i in range(n):
-    cache = feed_forward(X_test, params, i)
-    predictions = np.argmax(cache["A2"], axis=0)
-    labels = np.argmax(Y_test, axis=0)
+    if i not in byzantine_set:
+        cache = feed_forward(X_test, params, i)
+        predictions = np.argmax(cache["A2"], axis=0)
+        labels = np.argmax(Y_test, axis=0)
 
-    if i == 0:
-        print("Node 0 Data:")
-        print(confusion_matrix(predictions, labels))
-        print(classification_report(predictions, labels))
+        if i == 0:
+            print("Node 0 Data:")
+            print(confusion_matrix(predictions, labels))
+            print(classification_report(predictions, labels))
 
-    print("Node " + str(i) + " Accuracy: " + str(accuracy_score(predictions, labels)))
-    accuracy = accuracy + accuracy_score(predictions, labels)
+        print("Node " + str(i) + " Accuracy: " + str(accuracy_score(predictions, labels)))
+        accuracy = accuracy + accuracy_score(predictions, labels)
+        counter = counter + 1
 
-print("Average Accuracy: " + str(accuracy))
+print("Average Accuracy: " + str(accuracy/counter))
