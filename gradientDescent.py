@@ -1,28 +1,37 @@
 from sympy import *
 
-x = Symbol('x')
-y = Symbol('y')
-z = Symbol('z')
+# number of dimensions
+n = 30
 
-f = x ** 2 + y ** 2 - 2 * x * y
-
-
-def function(x, y):
-    return x ** 2 + y ** 2 - 2 * x * y
+# dictionary of variables
+symbolDict = {}
+for i in range(n):
+    symbolDict["x" + str(i)] = Symbol("x" + str(i))
 
 
-# First partial derivative with respect to x
-fpx = f.diff(x)
+f = symbolDict["x0"] ** 2
+for i in range(1, n):
+    f = f + i*(symbolDict["x" + str(i)] - i) ** 2
 
-# First partial derivative with respect to y
-fpy = f.diff(y)
 
-# Gradient
-grad = [fpx, fpy]
+def function():
+    output = f
+    for i in range(n):
+        output = output.subs(symbolDict["x" + str(i)], thetaDict["x" + str(i)])
+
+    return output
+
+# dictionary of partial derivatives
+gradientDict = {}
+for i in range(n):
+    gradientDict["x" + str(i)] = f.diff(symbolDict["x" + str(i)])
+
 
 # Data
-theta = 830  # x
-theta1 = 220  # y
+# dictionary of parameters
+thetaDict = {}
+for i in range(n):
+    thetaDict["x" + str(i)] = i*100
 alpha = .01
 iterations = 0
 check = 0
@@ -30,39 +39,48 @@ precision = 1 / 1000000
 printData = True
 maxIterations = 5000
 
+tempThetaDict = {}
 while True:
-    tempthetax = theta - alpha * N(fpx.subs(x, theta).subs(y, theta1)).evalf()
-    tempthetay = theta1 - alpha * N(fpy.subs(y, theta1)).subs(x, theta).evalf()
+    for i in range(n):
+        gradient = gradientDict["x" + str(i)]
 
-    # If the number of iterations goes up too much, maybe theta (and/or theta1)
-    # is diverging! Let's stop the loop and try to understand.
+        for j in range(n):
+            gradient = gradient.subs(symbolDict["x" + str(j)], thetaDict["x" + str(j)])
+
+        tempThetaDict["x" + str(i)] = thetaDict["x" + str(i)] - alpha * N(gradient).evalf()
+
+    # If the number of iterations goes up too much, maybe the parameters
+    # are diverging! Let's stop the loop and try to understand.
     iterations += 1
     if iterations > maxIterations:
         print("Too many iterations. Adjust alpha and make sure that the function is convex!")
         printData = False
         break
 
+
     # If the value of theta changes less of a certain amount, our goal is met.
-    if abs(tempthetax - theta) < precision and abs(tempthetay - theta1) < precision:
+    nextIteration = false
+    for i in range(n):
+        if abs(tempThetaDict["x" + str(i)] - thetaDict["x" + str(i)]) > precision:
+            nextIteration = True
+            continue
+
+    if not nextIteration:
         break
+
+
+    # Simultaneous update
+    for i in range(n):
+        thetaDict["x" + str(i)] = tempThetaDict["x" + str(i)]
+
 
     # Cost function output
     if iterations % 50 == 0:
-        print("Iteration " + str(iterations) + ", Cost: " + str(function(tempthetax, tempthetay)))
+        print("Iteration " + str(iterations) + ", Cost: " + str(function()))
 
-    # Simultaneous update
-    theta = tempthetax
-    theta1 = tempthetay
 
 if printData:
     print("The function " + str(f) + " converges to a minimum")
     print("Number of iterations:", iterations, sep=" ")
-    print("theta (x0) =", tempthetax, sep=" ")
-    print("theta1 (y0) =", tempthetay, sep=" ")
-
-# Output
-#
-# The function x**2 - 2*x*y + y**2 converges to a minimum
-# Number of iterations: 401
-# theta (x0) = 525.000023717248
-# theta1 (y0) = 524.999976282752
+    for i in range(n):
+        print("theta (x" + str(i) + ") =", thetaDict["x" + str(i)], sep=" ")
