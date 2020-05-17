@@ -5,3 +5,8 @@ Neural Network Reference: https://jonathanweisberg.org/post/A%20Neural%20Network
 Gradient Descent Reference: http://firsttimeprogrammer.blogspot.com/2014/09/multivariable-gradient-descent.html
 
 We adapt the above into the distributed and byzantine fault-tolerant setting.
+
+
+Additional sources:
+
+Geometric median: https://stackoverflow.com/questions/30299267/geometric-median-of-multidimensional-points
