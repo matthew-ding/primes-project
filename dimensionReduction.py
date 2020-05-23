@@ -1,86 +1,53 @@
-from sympy import *
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-# number of dimensions
-n = 30
+my_data = pd.read_csv('home.txt', names=["size", "bedroom", "price"])
 
-# dictionary of variables
-symbolDict = {}
-for i in range(n):
-    symbolDict["x" + str(i)] = Symbol("x" + str(i))
+my_data.head()
 
+# we need to normalize the features using mean normalization
+my_data = (my_data - my_data.mean()) / my_data.std()
 
-f = symbolDict["x0"] ** 2
-for i in range(1, n):
-    f = f + i*(symbolDict["x" + str(i)] - i) ** 2
+# setting the matrixes
+X = my_data.iloc[:, 0:2]
+ones = np.ones([X.shape[0], 1])
+X = np.concatenate((ones, X), axis=1)
 
-
-def function():
-    output = f
-    for i in range(n):
-        output = output.subs(symbolDict["x" + str(i)], thetaDict["x" + str(i)])
-
-    return output
-
-# dictionary of partial derivatives
-gradientDict = {}
-for i in range(n):
-    gradientDict["x" + str(i)] = f.diff(symbolDict["x" + str(i)])
+y = my_data.iloc[:, 2:3].values  # .values converts it from pandas.core.frame.DataFrame to numpy.ndarray
+theta = np.zeros([1, 3])
 
 
-# Data
-# dictionary of parameters
-thetaDict = {}
-for i in range(n):
-    thetaDict["x" + str(i)] = i*100
-alpha = .01
-iterations = 0
-check = 0
-precision = 1 / 1000000
-printData = True
-maxIterations = 5000
-
-tempThetaDict = {}
-while True:
-    for i in range(n):
-        gradient = gradientDict["x" + str(i)]
-
-        for j in range(n):
-            gradient = gradient.subs(symbolDict["x" + str(j)], thetaDict["x" + str(j)])
-
-        tempThetaDict["x" + str(i)] = thetaDict["x" + str(i)] - alpha * N(gradient).evalf()
-
-    # If the number of iterations goes up too much, maybe the parameters
-    # are diverging! Let's stop the loop and try to understand.
-    iterations += 1
-    if iterations > maxIterations:
-        print("Too many iterations. Adjust alpha and make sure that the function is convex!")
-        printData = False
-        break
+# computecost
+def computeCost(X, y, theta):
+    tobesummed = np.power(((X @ theta.T) - y), 2)
+    return np.sum(tobesummed) / (2 * len(X))
 
 
-    # If the value of theta changes less of a certain amount, our goal is met.
-    nextIteration = false
-    for i in range(n):
-        if abs(tempThetaDict["x" + str(i)] - thetaDict["x" + str(i)]) > precision:
-            nextIteration = True
-            continue
+def gradientDescent(X, y, theta, iters, alpha):
+    cost = np.zeros(iters)
+    for i in range(iters):
+        theta = theta - (alpha / len(X)) * np.sum(X * (X @ theta.T - y), axis=0)
+        cost[i] = computeCost(X, y, theta)
 
-    if not nextIteration:
-        break
+        if i%50==0:
+            print("Cost at iteration " + str(i) + ": " + str(cost[i]))
 
-
-    # Simultaneous update
-    for i in range(n):
-        thetaDict["x" + str(i)] = tempThetaDict["x" + str(i)]
+    return theta, cost
 
 
-    # Cost function output
-    if iterations % 50 == 0:
-        print("Iteration " + str(iterations) + ", Cost: " + str(function()))
+# set hyper parameters
+alpha = 0.01
+iters = 1000
 
+g, cost = gradientDescent(X, y, theta, iters, alpha)
+print(g)
 
-if printData:
-    print("The function " + str(f) + " converges to a minimum")
-    print("Number of iterations:", iterations, sep=" ")
-    for i in range(n):
-        print("theta (x" + str(i) + ") =", thetaDict["x" + str(i)], sep=" ")
+finalCost = computeCost(X, y, g)
+print("Final Cost: " + str(finalCost))
+
+fig, ax = plt.subplots()
+ax.plot(np.arange(iters), cost, 'r')
+ax.set_xlabel('Iterations')
+ax.set_ylabel('Cost')
+ax.set_title('Error vs. Training Epoch')
