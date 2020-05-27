@@ -4,9 +4,9 @@ from scipy.spatial.distance import cdist, euclidean
 import pandas as pd
 
 ### HYPERPARAMETERS
-d = 30  # number of dimensions
-m = 8  # number of nodes
-n = 100  # total number of datapoints
+d = 10  # number of dimensions
+m = 10  # number of nodes
+n = 100000  # total number of datapoints
 
 byzantine_set = [4, 5, 9]  # set of byzantine nodes
 adjList = {0: [3], 1: [3], 2: [3], 3: [0, 1, 2, 4, 5],
@@ -42,7 +42,7 @@ for i in range(m):
 
     cost_set.append([])
 
-
+### TODO: New aggregation function??
 def geometric_median(X, eps=1e-5):
     y = np.mean(X, 0)
 
@@ -80,17 +80,14 @@ def computeCost(X, y, theta):
 
 def gradientDescent(iters, alpha, target):
     while True:
-        iters += 1
-
         for i in range(m):
             calculateGradient(X_set[i], Y_set[i], theta_set[i], i)
-
 
         for i in range(m):
             currentNeighborGrad = []
             for j in range(m):
                 if j == i or j in adjList[i]:
-                    currentNeighborGrad.append(gradient_set[i])
+                    currentNeighborGrad.append(gradient_set[j])
 
             currentNeighborGrad = np.array(currentNeighborGrad)
             gradient = geometric_median(currentNeighborGrad)
@@ -99,11 +96,16 @@ def gradientDescent(iters, alpha, target):
             cost_set[i].append(computeCost(X_set[i], Y_set[i], theta_set[i]))
 
         if iters % 1 == 0:
-            print("Cost at iteration " + str(iters+1) + ": " + str(cost_set[target][iters]))
+            print("Cost at iteration " + str(iters + 1) + ": " + str(cost_set[target][iters]))
 
         if iters != 0:
             if abs(cost_set[target][iters] - cost_set[target][iters - 1]) < precision:
                 break
+
+            if cost_set[target][iters] - cost_set[target][iters - 1] > 0:
+                break
+
+        iters += 1
 
     return theta_set[target], cost_set[target]
 
@@ -112,20 +114,20 @@ def calculateGradient(X, y, theta, i):
     gradient = (1.0 / len(X)) * np.sum(X * (X @ theta.T - y), axis=0)
 
     if i in byzantine_set:
-        gradient*=1.0
+        gradient *= 1.0
 
     gradient_set[i] = gradient
 
 
 # set hyper parameters
 alpha = 0.001
-iters = -1
-precision = 0.0000001
-target = 5
+iters = 0
+precision = 0.00001
+target = 3
 
 g, cost = gradientDescent(iters, alpha, target)
 
-finalCost = computeCost(X, y, g)
+finalCost = computeCost(X_set[target], Y_set[target], g)
 print("Converges, Final Cost: " + str(finalCost) + "\n")
 
 g = g.tolist()[0]
@@ -134,4 +136,3 @@ for i in range(1, len(g)):
     print("Variable: x" + str(i) + ", Coefficient: " + str(g[i]))
 
 print("Constant: " + str(g[0]))
-
