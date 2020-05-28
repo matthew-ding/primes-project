@@ -1,6 +1,6 @@
-from sympy import *
 import numpy as np
 from scipy.spatial.distance import cdist, euclidean
+from scipy.linalg import norm
 import pandas as pd
 
 ### HYPERPARAMETERS
@@ -42,7 +42,7 @@ for i in range(m):
 
     cost_set.append([])
 
-### TODO: New aggregation function??
+
 def geometric_median(X, eps=1e-5):
     y = np.mean(X, 0)
 
@@ -72,6 +72,18 @@ def geometric_median(X, eps=1e-5):
         y = y1
 
 
+def trimmed_mean(X, neighbor_count):
+    trim_count = neighbor_count // 2
+    total = neighbor_count+1
+    sorted_X = np.sort(X, axis=0)
+
+    # trimming
+    sorted_X = sorted_X[trim_count+1: total-trim_count+1, :]
+    size = len(sorted_X)
+    # trimmed mean
+    return np.sum(sorted_X, axis=0) / size
+
+
 # compute cost
 def computeCost(X, y, theta):
     tobesummed = np.power(((X @ theta.T) - y), 2)
@@ -91,6 +103,9 @@ def gradientDescent(iters, alpha, target):
 
             currentNeighborGrad = np.array(currentNeighborGrad)
             gradient = geometric_median(currentNeighborGrad)
+            # gradient = trimmed_mean(currentNeighborGrad, len(adjList[i]))
+
+            alpha = 0.01/(iters+1)
             theta_set[i] = theta_set[i] - alpha * gradient
 
             cost_set[i].append(computeCost(X_set[i], Y_set[i], theta_set[i]))
@@ -102,8 +117,8 @@ def gradientDescent(iters, alpha, target):
             if abs(cost_set[target][iters] - cost_set[target][iters - 1]) < precision:
                 break
 
-            if cost_set[target][iters] - cost_set[target][iters - 1] > 0:
-                break
+            # if cost_set[target][iters] - cost_set[target][iters - 1] > 0:
+            #   break
 
         iters += 1
 
@@ -114,14 +129,14 @@ def calculateGradient(X, y, theta, i):
     gradient = (1.0 / len(X)) * np.sum(X * (X @ theta.T - y), axis=0)
 
     if i in byzantine_set:
-        gradient *= 1.0
+        gradient *= -1.0
 
     gradient_set[i] = gradient
 
 
 # set hyper parameters
-alpha = 0.001
 iters = 0
+alpha = 0.001
 precision = 0.00001
 target = 3
 
