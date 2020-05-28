@@ -1,45 +1,46 @@
-from sympy import *
 import numpy as np
 from scipy.spatial.distance import cdist, euclidean
+from scipy.linalg import norm
+import pandas as pd
 
 ### HYPERPARAMETERS
-n = 30  # number of dimensions
-m = 8  # number of nodes
-byzantine_set = [0, 1, 7]  # set of byzantine nodes
-# adjList = {0: [3], 1: [3], 2: [3], 3: [0, 1, 2, 4, 5],
-#           4: [3, 6], 5: [3, 6], 6: [4, 5, 7, 8, 9], 7: [6], 8: [6], 9: [6]}
+d = 10  # number of dimensions
+m = 10  # number of nodes
+n = 100000  # total number of datapoints
 
-adjList = {0: [4, 5], 1: [4, 5], 2: [4, 5], 3: [4, 5],
-           4: [0, 1, 2, 3, 6], 5: [0, 1, 2, 3, 6], 6: [4, 5, 7], 7: [6]}
+byzantine_set = [4, 5, 9]  # set of byzantine nodes
+adjList = {0: [3], 1: [3], 2: [3], 3: [0, 1, 2, 4, 5],
+           4: [3, 6], 5: [3, 6], 6: [4, 5, 7, 8, 9], 7: [6], 8: [6], 9: [6]}
 
-dataset = []
+# adjList = {0: [4, 5], 1: [4, 5], 2: [4, 5], 3: [4, 5],
+#           4: [0, 1, 2, 3, 6], 5: [0, 1, 2, 3, 6], 6: [4, 5, 7], 7: [6]}
+
+
+my_data = pd.read_csv('dataset.txt')  # , names=nm)
+
+X_set = []  # list of all x matrices
+Y_set = []  # list of all y vectors
+theta_set = []  # list of all parameter vectors
+gradient_set = []
+cost_set = []
+
 for i in range(m):
-    list = []
-    for j in range(n):
-        list.append(abs(float(np.random.normal(j, 0))))
-    dataset.append(list)
+    # Setting up X-Values
+    X = my_data.iloc[i * int(n / m):(i + 1) * int(n / m), 0:d]
+    ones = np.ones([X.shape[0], 1])
+    X = np.concatenate((ones, X), axis=1)
+    X_set.append(X)
 
-# dictionary of variables
-symbolDict = {}
-for i in range(n):
-    symbolDict["x" + str(i)] = Symbol("x" + str(i))
+    # Setting up costs (y values), .values converts it from pandas.core.frame.DataFrame to numpy.ndarray
+    y = my_data.iloc[i * int(n / m):(i + 1) * int(n / m), d:d + 1].values
+    Y_set.append(y)
 
-functionDict = []
-for i in range(m):
-    f = 0
-    for j in range(n):
-        expression = dataset[i][j] * (symbolDict["x" + str(j)] - dataset[i][j]) ** 2.0
-        f += expression
-    functionDict.append(f)
+    # parameter arrays
+    theta = np.zeros([1, d + 1])
+    theta_set.append(theta)
+    gradient_set.append(theta)
 
-
-# output cost function for machine j
-def function(j):
-    output = functionDict[j]
-    for i in range(n):
-        output = output.subs(symbolDict["x" + str(i)], thetaDict[j][i])
-
-    return output
+    cost_set.append([])
 
 
 def geometric_median(X, eps=1e-5):
@@ -71,73 +72,82 @@ def geometric_median(X, eps=1e-5):
         y = y1
 
 
-# dictionary of partial derivatives (n x m dimensions)
-gradientDict = []
-for j in range(m):
-    row = []
-    for i in range(n):
-        row.append(functionDict[j].diff(symbolDict["x" + str(i)]))
-    gradientDict.append(row)
+def trimmed_mean(X, neighbor_count):
+    trim_count = neighbor_count // 2
+    total = neighbor_count+1
+    sorted_X = np.sort(X, axis=0)
 
-# Data
-# dictionary of parameters
-thetaDict = []
+    # trimming
+    sorted_X = sorted_X[trim_count+1: total-trim_count+1, :]
+    size = len(sorted_X)
+    # trimmed mean
+    return np.sum(sorted_X, axis=0) / size
 
-for j in range(m):
-    row = []
-    for i in range(n):
-        row.append(i * 100)
-    thetaDict.append(row)
 
-thetaDict = np.array(thetaDict, dtype=float)
+# compute cost
+def computeCost(X, y, theta):
+    tobesummed = np.power(((X @ theta.T) - y), 2)
+    return np.sum(tobesummed) / (2 * len(X))
 
-alpha = .005
-iterations = 0
-printData = True
 
-while iterations < 150:
-    calculatedGradients = {}
+def gradientDescent(iters, alpha, target):
+    while True:
+        for i in range(m):
+            calculateGradient(X_set[i], Y_set[i], theta_set[i], i)
 
-    # iterating through machines
-    for z in range(m):
-        calculatedGradients[z] = []
-        # iterating through dimensions
-        for i in range(n):
-            gradient = gradientDict[z][i]
+        for i in range(m):
+            currentNeighborGrad = []
+            for j in range(m):
+                if j == i or j in adjList[i]:
+                    currentNeighborGrad.append(gradient_set[j])
 
-            for j in range(n):
-                gradient = gradient.subs(symbolDict["x" + str(j)], thetaDict[z][j])
+            currentNeighborGrad = np.array(currentNeighborGrad)
+            gradient = geometric_median(currentNeighborGrad)
+            # gradient = trimmed_mean(currentNeighborGrad, len(adjList[i]))
 
-            gradient = float(gradient)
+            alpha = 0.01/(iters+1)
+            theta_set[i] = theta_set[i] - alpha * gradient
 
-            if z in byzantine_set:
-                gradient *= -1.0
+            cost_set[i].append(computeCost(X_set[i], Y_set[i], theta_set[i]))
 
-            calculatedGradients[z].append(gradient)
+        if iters % 1 == 0:
+            print("Cost at iteration " + str(iters + 1) + ": " + str(cost_set[target][iters]))
 
-    # Simultaneous update of gradients, based on neighbors
-    for i in range(m):
-        currentNeighborGrad = []
+        if iters != 0:
+            if abs(cost_set[target][iters] - cost_set[target][iters - 1]) < precision:
+                break
 
-        for j in range(m):
-            if j in adjList[i] or j == i:
-                currentNeighborGrad.append(calculatedGradients[j])
+            # if cost_set[target][iters] - cost_set[target][iters - 1] > 0:
+            #   break
 
-        currentNeighborGrad = np.array(currentNeighborGrad, dtype=float)
+        iters += 1
 
-        ### TODO: Fix geometric median update
-        thetaDict[i] = thetaDict[i] - alpha * geometric_median(
-            currentNeighborGrad)  # np.array(calculatedGradients[i], dtype=float)
+    return theta_set[target], cost_set[target]
 
-    # if (i==5):
-    #     print(geometric_median(currentNeighborGrad))
-    #     print(np.array(calculatedGradients[i], dtype=float))
 
-    iterations += 1
-    # Cost function output
-    if iterations % 10 == 0:
-        print("Iteration " + str(iterations) + ", Cost: " + str(function(4)))
+def calculateGradient(X, y, theta, i):
+    gradient = (1.0 / len(X)) * np.sum(X * (X @ theta.T - y), axis=0)
 
-if printData:
-    for i in range(n):
-        print("theta (x" + str(i) + ") =", thetaDict[0][i], sep=" ")
+    if i in byzantine_set:
+        gradient *= -1.0
+
+    gradient_set[i] = gradient
+
+
+# set hyper parameters
+iters = 0
+alpha = 0.001
+precision = 0.00001
+target = 3
+
+g, cost = gradientDescent(iters, alpha, target)
+
+finalCost = computeCost(X_set[target], Y_set[target], g)
+print("Converges, Final Cost: " + str(finalCost) + "\n")
+
+g = g.tolist()[0]
+
+for i in range(1, len(g)):
+    print("Variable: x" + str(i) + ", Coefficient: " + str(g[i]))
+
+print("Constant: " + str(g[0]))
