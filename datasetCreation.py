@@ -4,8 +4,9 @@ import random
 file = open("dataset.txt", "w")
 file1 = open("coefficient.txt", "w")
 
-d = 30  # number of dimensions in input
-n = 100  # number of datapoints
+d = 1000  # number of dimensions in input
+n = 10000  # number of datapoints
+sparseCoefficient = True
 
 for i in range(d):
     file.write("x" + str(i + 1) + ",")
@@ -14,7 +15,15 @@ file.write("Cost" + "\n")
 
 coefficients = []  # stores list of parameters (size d)
 for i in range(d + 1):
-    coefficients.append(random.uniform(-10, 10))
+    if sparseCoefficient:
+        x = random.randrange(7)
+
+        if x != 0:
+            coefficients.append(0)
+        else:
+            coefficients.append(random.uniform(-10, 10))
+    else:
+        coefficients.append(random.uniform(-10, 10))
 
 for i in range(d + 1):
     if i == d:
@@ -33,4 +42,4 @@ for j in range(n):
             line += str(parameter) + ","
             cost += parameter * coefficients[i]
 
-    file.write(str(line) + str(cost + np.random.normal(0, 10)) + "\n")
+    file.write(str(line) + str(cost + np.random.normal(0, 2)) + "\n")
