@@ -6,8 +6,8 @@ from sklearn import random_projection
 
 # HYPERPARAMETERS
 d = 1000  # number of dimensions
-m = 10  # number of nodes
-n = 50  # total number of data points
+m = 3  # number of nodes
+n = 1000  # total number of data points
 
 byzantine_set = []
 X_set = []  # list of all x matrices
@@ -27,7 +27,7 @@ X = np.concatenate((ones, X), axis=1)
 y = my_data.iloc[:, d:d + 1].values  # .values converts it from pandas.core.frame.DataFrame to numpy.ndarray
 
 # projection of input vectors (x values)
-transformer = random_projection.GaussianRandomProjection(eps=0.2)
+transformer = random_projection.GaussianRandomProjection(eps=0.5)
 
 # generating random gaussian matrix
 transformer.fit(np.array(X))
@@ -37,6 +37,7 @@ X = transformer.transform(X)
 
 # new number of dimension
 d_new = len(X[0])
+print("New dimension: " + str(d_new))
 
 for i in range(m):
     X_set.append(X[i * int(n / m):(i + 1) * int(n / m), :])
@@ -99,7 +100,7 @@ def gradientDescent(iters, theta, gradient_set):
 
     while True:
         iters += 1
-        alpha = 0.01 * 1 / iters
+        alpha = 0.03 * 1 / iters
 
         # calculating gradients
         for i in range(m):
@@ -110,7 +111,7 @@ def gradientDescent(iters, theta, gradient_set):
         theta = theta - alpha * geometric_median(gradient_set)
         cost.append(computeCost(X_set[i], Y_set[i], theta))
 
-        if iters % 1 == 0:
+        if iters % 1000 == 0:
             print("Cost at iteration " + str(iters) + ": " + str(cost[iters]))
 
         if iters != 1:
@@ -122,7 +123,7 @@ def gradientDescent(iters, theta, gradient_set):
 
 # set hyper parameters
 iters = 0
-precision = 0.000000001
+precision = 0.00000001
 
 g, cost = gradientDescent(iters, theta, gradient_set)
 
@@ -140,7 +141,3 @@ for i in range(d + 1):
     else:
         print("Variable x" + str(i) + " Coefficient: " + str(round(g.x[i], 5)))
 
-# for i in range(1, len(g)):
-#    print("Variable: x" + str(i) + ", Coefficient: " + str(g[i]))
-#
-# print("Constant: " + str(g[0]))
