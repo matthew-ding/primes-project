@@ -17,7 +17,9 @@ X_set = []  # list of all x matrices
 Y_set = []  # list of all y vectors
 nodeList = []  # list of all nodes
 cost_set = []  # list of each iterations cost
-
+byzantine_parameter = np.zeros([1, d + 1])
+for j in range(d):
+    byzantine_parameter[0][j] = -1000
 
 def geometric_median(X, eps=1e-5):
     y = np.mean(X, 0)
@@ -57,19 +59,15 @@ def computeCost(X, y, theta):
 class Node:
     def __init__(self, n):
         self.num = n
-        self.parameterList = {n: Parameter(0)}
+        self.parameterList = {n: Parameter()}
 
     def getParams(self):
         return self.parameterList
 
 
 class Parameter:
-    def __init__(self, it):
-        self.iter = it
+    def __init__(self):
         self.params = np.zeros([1, d + 1])
-
-    def getIter(self):
-        return self.iter
 
     def getParams(self):
         return self.params
@@ -93,10 +91,9 @@ for i in range(m):
     nodeList.append(Node(i))
 
     if i in byzantine_set:
-        for j in range(d):
-            nodeList[i].parameterList[i].params[0][j] = -1000
+        nodeList[i].parameterList[i].params = byzantine_parameter
 
-    cost_set.append([])
+    cost_set.append({})
 
 
 def broadcast():
@@ -109,10 +106,7 @@ def broadcast():
 
                 # updating parameters to newest iteration
                 for key in tempNeighbor:
-                    if key not in currentParamList:
-                        currentParamList[key] = tempNeighbor[key]
-                    elif currentParamList[key].getIter() < tempNeighbor[key].getIter():
-                        currentParamList[key] = tempNeighbor[key]
+                    currentParamList[key] = tempNeighbor[key]
 
 
 # returns true if node is receiving majority honest parameters
@@ -129,14 +123,19 @@ def checkMajority(target):
     return honestCounter / (honestCounter + byzantineCounter) > 0.5
 
 
-def gradientDescent(iters, target):
+def gradientDescent(iters, target, nodeList):
     while True:
         # neighbor aggregation
-        broadcast()
+        for i in range(diameter):
+            iters += 1
+            broadcast()
+
+        newParamList = {}
 
         for i in range(m):
-            theta = nodeList[i].parameterList
-            if iters >= diameter-1:
+            if i not in byzantine_set:
+                theta = nodeList[i].parameterList
+
                 # geometric median
                 parameterMatrix = []
                 for j in range(m):
@@ -144,51 +143,41 @@ def gradientDescent(iters, target):
 
                 theta[i].params = np.reshape(geometric_median(np.array(parameterMatrix)), (1, d + 1))
 
-                # gradient descent
-                if i not in byzantine_set:
-                    # gradient calculation
-                    gradient = (1.0 / len(X_set[i])) * np.sum(X_set[i] * (X_set[i] @ theta[i].getParams().T - Y_set[i]),
-                                                              axis=0)
-
-                    # gradient update
-                    alpha = 0.3 / (iters + 1)
-                    theta[i].params = theta[i].params - alpha * gradient
-                    theta[i].iter = iters
+                # gradient calculation
+                gradient = (1.0 / len(X_set[i])) * np.sum(X_set[i] * (X_set[i] @ theta[i].getParams().T - Y_set[i]),
+                                                          axis=0)
+                # gradient update
+                alpha = 0.3 / (iters/diameter + 1)
+                newParamList[i] = (theta[i].params - alpha * gradient)
+            else:
+                newParamList[i] = byzantine_parameter
 
             # cost calculation
-            cost_set[i].append(computeCost(X_set[i], Y_set[i], theta[i].params))
+            cost_set[i][iters] = computeCost(X_set[i], Y_set[i], newParamList[i])
 
-        if (iters + 1) % 100 == 0:
+        # resetting parameter arrays
+        nodeList = []
+        for i in range(m):
+            nodeList.append(Node(i))
+            nodeList[i].parameterList[i].params = newParamList[i]
+
+        if iters % 1000 == 0:
             print("Cost at iteration " + str(iters + 1) + ": " + str(cost_set[target][iters]))
-
-            if iters <= 20:
-                if checkMajority(target):
-                    print("Honest Majority")
-                else:
-                    print("Not Honest Majority")
 
         if float(cost_set[target][iters]) < costTarget:
             break
-
-        # if iters != 0 and iters >= diameter-1:
-        #    if abs(cost_set[target][iters] - cost_set[target][iters - 1]) < precision:
-        #        break
-
-        iters += 1
 
     return nodeList[target].getParams()[target].getParams(), cost_set[target], iters
 
 
 # set hyper parameters
 iters = 0
-precision = 0.00001
 target = 7
 costTarget = 2
 
-g, cost, iters = gradientDescent(iters, target)
+g, cost, iters = gradientDescent(iters, target, nodeList)
 
 finalCost = computeCost(X_set[target], Y_set[target], g)
-# print("Converges in " + str(iters) + " iterations")
 print("Converges below cost of " + str(costTarget) + " in " + str(iters) + " iterations")
 print("Final Cost: " + str(finalCost) + "\n")
 
