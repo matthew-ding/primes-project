@@ -74,8 +74,8 @@ def get_adj_list():
     return adjList, byzantine_output, total_size
 
 
-def get_relay_graph():
-    byzantine_size = 10  # number of byzantine nodes
+def get_relay_graph(diameter):
+    byzantine_size = diameter  # number of byzantine nodes
     honest_size = byzantine_size + 1  # number of honest nodes
     total_size = byzantine_size + honest_size
 
@@ -119,7 +119,6 @@ def get_relay_graph():
     for i in range(byzantine_size + honest_size):
         adjList[i] = [n for n in G.neighbors(i)]
 
-    graph_diameter = honest_size
     target = byzantine_size
 
-    return adjList, byzantine_output, total_size, graph_diameter, target
+    return adjList, byzantine_output, total_size, target
