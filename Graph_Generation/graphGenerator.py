@@ -2,6 +2,7 @@ import random
 from networkx import *
 import matplotlib.pyplot as plt
 
+
 def get_adj_list():
     byzantine_size = 10  # number of byzantine nodes
     honest_size = 10  # number of honest nodes
@@ -64,7 +65,7 @@ def get_adj_list():
 
     adjList = {}
 
-    for i in range(byzantine_size+honest_size):
+    for i in range(byzantine_size + honest_size):
         adjList[i] = [n for n in final_graph.neighbors(i)]
 
         if final_graph.nodes[i]["byzantine"]:
@@ -72,4 +73,53 @@ def get_adj_list():
 
     return adjList, byzantine_output, total_size
 
-get_adj_list()
+
+def get_relay_graph():
+    byzantine_size = 10  # number of byzantine nodes
+    honest_size = byzantine_size + 1  # number of honest nodes
+    total_size = byzantine_size + honest_size
+
+    byzantine_output = []
+    for i in range(byzantine_size):
+        byzantine_output.append(i)
+
+    # graph generation
+    G = Graph()
+
+    # coloring graph
+    colorList = []
+    for i in range(byzantine_size):
+        colorList.append('r')
+
+    for i in range(honest_size):
+        colorList.append('b')
+
+    # adding nodes
+    for i in range(byzantine_size):
+        G.add_node(i, type='byzantine')
+
+    for i in range(honest_size):
+        G.add_node(byzantine_size+i, type='honest')
+
+    # adding edges
+    for i in range(byzantine_size):
+        G.add_edge(i, byzantine_size)
+
+    for i in range(byzantine_size):
+        G.add_edge(byzantine_size+i, byzantine_size+i+1)
+
+    # drawing graph
+    draw_networkx(G, node_color=colorList)
+    plt.savefig("relay_graph.png")
+    plt.clf()
+
+    # adjacency list generation
+    adjList = {}
+
+    for i in range(byzantine_size + honest_size):
+        adjList[i] = [n for n in G.neighbors(i)]
+
+    graph_diameter = honest_size
+    target = byzantine_size
+
+    return adjList, byzantine_output, total_size, graph_diameter, target
