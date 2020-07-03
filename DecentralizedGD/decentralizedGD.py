@@ -8,9 +8,6 @@ sys.path.append('../')
 
 
 ### HYPERPARAMETERS
-d = 10  # number of dimensions
-n = 1000  # total number of datapoints
-
 # byzantine_set = [4, 5, 9]  # set of byzantine nodes
 # adjList = {0: [3], 1: [3], 2: [3], 3: [0, 1, 2, 4, 5],
 #           4: [3, 6], 5: [3, 6], 6: [4, 5, 7, 8, 9], 7: [6], 8: [6], 9: [6]}
@@ -18,7 +15,11 @@ n = 1000  # total number of datapoints
 # adjList = {0: [4, 5], 1: [4, 5], 2: [4, 5], 3: [4, 5],
 #           4: [0, 1, 2, 3, 6], 5: [0, 1, 2, 3, 6], 6: [4, 5, 7], 7: [6]}
 
+d = 10  # number of dimensions
+n = 1000  # number of datapoints
 adjList, byzantine_set, m = graphGenerator.get_adj_list()
+print("Graph Generated Successfully")
+
 
 cur_path = os.path.dirname(__file__)
 new_path = os.path.relpath('..\\Dataset_Generation\\dataset.txt', cur_path)
@@ -27,7 +28,7 @@ my_data = pd.read_csv(new_path)
 X_set = []  # list of all x matrices
 Y_set = []  # list of all y vectors
 theta_set = []  # list of all parameter vectors
-gradient_set = []
+temp_theta_set = []
 cost_set = []
 
 for i in range(m):
@@ -43,7 +44,7 @@ for i in range(m):
 
     # parameter arrays
     theta_set.append(np.zeros([1, d + 1]))
-    gradient_set.append(np.zeros([1, d + 1]))
+    temp_theta_set.append(np.zeros([1, d + 1]))
 
     cost_set.append([])
 
@@ -95,60 +96,55 @@ def computeCost(X, y, theta):
     return np.sum(tobesummed) / (2 * len(X))
 
 
-def gradientDescent(iters, alpha, target):
+def gradientDescent(iters, target):
     while True:
         for i in range(m):
-            calculateGradient(X_set[i], Y_set[i], theta_set[i], i)
+            # gradient calculation
+            gradient = (1.0 / len(X_set[i])) * np.sum(X_set[i] * (X_set[i] @ theta_set[i].T - Y_set[i]), axis=0)
 
+            if i in byzantine_set:
+                gradient *= -1.0
+
+            # gradient update
+            alpha = 0.3 / (iters + 1)
+            temp_theta_set[i] = theta_set[i] - alpha * gradient
+
+        # neighbor aggregation
         for i in range(m):
-            currentNeighborGrad = []
+            currentNeighborParam = []
             for j in range(m):
                 if j == i or j in adjList[i]:
-                    currentNeighborGrad.append(gradient_set[j])
+                    currentNeighborParam.append(temp_theta_set[j][0])
+                    # print(temp_theta_set[j][0])
 
-            currentNeighborGrad = np.array(currentNeighborGrad)
-            gradient = geometric_median(currentNeighborGrad)
-            # gradient = trimmed_mean(currentNeighborGrad, len(adjList[i]))
 
-            alpha = 0.01 / (iters + 1)
-            theta_set[i] = theta_set[i] - alpha * gradient
+            theta_set[i] = np.reshape(geometric_median(np.array(currentNeighborParam)), (1,11))
+            # theta_set[i] = trimmed_mean(currentNeighborGrad, len(adjList[i]))
 
             cost_set[i].append(computeCost(X_set[i], Y_set[i], theta_set[i]))
 
-        if iters % 100 == 0:
+        if (iters+1) % 100 == 0:
             print("Cost at iteration " + str(iters + 1) + ": " + str(cost_set[target][iters]))
 
         if iters != 0:
             if abs(cost_set[target][iters] - cost_set[target][iters - 1]) < precision:
                 break
 
-            # if cost_set[target][iters] - cost_set[target][iters - 1] > 0:
-            #   break
-
         iters += 1
 
-    return theta_set[target], cost_set[target]
-
-
-def calculateGradient(X, y, theta, i):
-    gradient = (1.0 / len(X)) * np.sum(X * (X @ theta.T - y), axis=0)
-
-    if i in byzantine_set:
-        gradient *= -1.0
-
-    gradient_set[i] = gradient
+    return theta_set[target], cost_set[target], iters
 
 
 # set hyper parameters
 iters = 0
-alpha = 0.001
-precision = 0.001
+precision = 0.00001
 target = 3
 
-g, cost = gradientDescent(iters, alpha, target)
+g, cost, iters = gradientDescent(iters, target)
 
 finalCost = computeCost(X_set[target], Y_set[target], g)
-print("Converges, Final Cost: " + str(finalCost) + "\n")
+print("Converges in " + str(iters) + " iterations")
+print("Final Cost: " + str(finalCost) + "\n")
 
 g = g.tolist()[0]
 
