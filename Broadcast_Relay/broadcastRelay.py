@@ -1,26 +1,40 @@
 import copy
-import os
 import sys
 import numpy as np
 from scipy.spatial.distance import cdist, euclidean
-import pandas as pd
+from Dataset_Generation import datasetCreation
 from Graph_Generation import graphGenerator
+
 sys.path.append('../')
 
 
 class Node:
-    def __init__(self, n, d):
+    def __init__(self, n, d, m):
         self.num = n
         self.parameterList = {n: Parameter(0, d)}
+        self.m = m
 
     def getParams(self):
         return self.parameterList
+
+    def __str__(self):
+        output = ""
+        for i in range(self.m):
+            if i in self.getParams():
+                output += "Parameter " + str(i) + ": " + str(self.getParams()[i].getParams()) + "\n"
+            else:
+                output += "Parameter " + str(i) + ": NONE" + "\n"
+
+        return output + "\n"
 
 
 class Parameter:
     def __init__(self, it, d):
         self.iter = it
         self.params = np.zeros([1, d + 1])
+
+        for i in range(d + 1):
+            self.params[0][i] = 10
 
     def getIter(self):
         return self.iter
@@ -33,12 +47,19 @@ def main(diameter, maxIter):
     d = 10  # number of dimensions
     n = 10000  # number of datapoints
 
+    # Graph generation
     adjList, byzantine_set, m, target = graphGenerator.get_relay_graph(diameter)
     print("Graph Generated Successfully")
 
-    cur_path = os.path.dirname(__file__)
-    new_path = os.path.relpath('..\\Dataset_Generation\\dataset.txt', cur_path)
-    my_data = pd.read_csv(new_path)
+    # byzantine_set = [0, 1, 2, 3, 4, 5]
+    # byzantine_set = []
+
+    # Dataset Generation
+    my_data = datasetCreation.datasetGeneration(m, d, n)
+    print("Dataset Generated Successfully")
+    # cur_path = os.path.dirname(__file__)
+    # new_path = os.path.relpath('..\\Dataset_Generation\\dataset.txt', cur_path)
+    # my_data = pd.read_csv(new_path)
 
     X_set = []  # list of all x matrices
     Y_set = []  # list of all y vectors
@@ -57,10 +78,10 @@ def main(diameter, maxIter):
         Y_set.append(y)
 
         # parameter arrays
-        nodeList.append(Node(i, d))
+        nodeList.append(Node(i, d, m))
 
         if i in byzantine_set:
-            for j in range(d):
+            for j in range(d + 1):
                 nodeList[i].parameterList[i].params[0][j] = -1000
 
         cost_set.append([])
@@ -69,7 +90,14 @@ def main(diameter, maxIter):
     iters = 0
     precision = 0.00001
     costTarget = 2
-    costList = [computeCost(X_set[target], Y_set[target], np.zeros([1, d + 1]))]  # costs, output of main function
+
+    parameter = np.zeros([1, d + 1])
+
+    for i in range(d + 1):
+        parameter[0][i] = 10
+
+    costList = [computeCost(X_set[target], Y_set[target],
+                            parameter)]  # np.zeros([1, d + 1]))]  # costs, output of main function
 
     g, cost, iters = gradientDescent(iters, target, nodeList, m, adjList, diameter, byzantine_set, X_set, Y_set,
                                      cost_set, costTarget, d, maxIter)
@@ -86,7 +114,6 @@ def main(diameter, maxIter):
         print("Variable: x" + str(i) + ", Coefficient: " + str(g[i]))
 
     print("Constant: " + str(g[0]))
-
 
     for i in cost:
         costList.append(i)
@@ -123,17 +150,30 @@ def geometric_median(X, eps=1e-5):
         y = y1
 
 
+def trimmed_mean(X, neighbor_count):
+    trim_count = neighbor_count // 2
+    total = neighbor_count + 1
+    sorted_X = np.sort(X, axis=0)
+
+    # trimming
+    sorted_X = sorted_X[trim_count + 1: total - trim_count + 1, :]
+    size = len(sorted_X)
+    print("SIZE: " + str(size))
+    # trimmed mean
+    return np.sum(sorted_X, axis=0) / size
+
+
 # compute cost
 def computeCost(X, y, theta):
     tobesummed = np.power(((X @ theta.T) - y), 2)
     return np.sum(tobesummed) / (2 * len(X))
 
 
-def broadcast(nodeList, m, adjList):
+def broadcast(nodeList, m, adjList, byzantine_set):
     tempNodeList = copy.deepcopy(nodeList)  # node list before broadcast starts
     for i in range(m):
-        for j in range(m):
-            if j in adjList[i]:
+        if i not in byzantine_set:  # byzantine nodes don't store other node's data
+            for j in adjList[i]:
                 tempNeighbor = tempNodeList[j].getParams()
                 currentParamList = nodeList[i].parameterList
 
@@ -163,35 +203,36 @@ def gradientDescent(iters, target, nodeList, m, adjList, diameter, byzantine_set
                     d, maxIter):
     while True:
         # neighbor aggregation
-        broadcast(nodeList, m, adjList)
+        broadcast(nodeList, m, adjList, byzantine_set)
 
         for i in range(m):
             theta = nodeList[i].parameterList
-            if iters >= diameter - 1:
+            if iters >= diameter - 1 and i not in byzantine_set:
                 # geometric median
                 parameterMatrix = []
-                for j in range(m):
-                    parameterMatrix.append(theta[i].getParams()[0])
+                for j in theta:
+                    parameterMatrix.append(theta[j].getParams()[0])
 
                 theta[i].params = np.reshape(geometric_median(np.array(parameterMatrix)), (1, d + 1))
+                # theta[i].params = np.reshape(trimmed_mean(np.array(parameterMatrix), len(parameterMatrix)-1), (1, d + 1))
 
                 # gradient descent
-                if i not in byzantine_set:
-                    # gradient calculation
-                    gradient = (1.0 / len(X_set[i])) * np.sum(X_set[i] * (X_set[i] @ theta[i].getParams().T - Y_set[i]),
-                                                              axis=0)
+                # gradient calculation
+                gradient = (1.0 / len(X_set[i])) * np.sum(X_set[i] * (X_set[i] @ theta[i].getParams().T - Y_set[i]),
+                                                          axis=0)
 
-                    # gradient update
-                    # alpha = 0.3 / (iters + 1)
-                    alpha = 0.01
-                    theta[i].params = theta[i].params - alpha * gradient
-                    theta[i].iter = iters
+                # gradient update
+                alpha = 0.016 / (iters + 1)
+                # alpha = min(0.01, 0.0 / (iters + 1))
+                theta[i].params = theta[i].params - alpha * gradient
+                theta[i].iter = iters
 
             # cost calculation
             cost_set[i].append(computeCost(X_set[i], Y_set[i], theta[i].params))
 
-        if (iters + 1) % 100 == 0:
+        if (iters + 1) % 10 == 0:
             print("Cost at iteration " + str(iters + 1) + ": " + str(cost_set[target][iters]))
+            # print(nodeList[target].parameterList[target].params)
 
             if iters <= 20:
                 if checkMajority(target, nodeList, byzantine_set):
@@ -213,6 +254,5 @@ def gradientDescent(iters, target, nodeList, m, adjList, diameter, byzantine_set
 
     return nodeList[target].getParams()[target].getParams(), cost_set[target], iters
 
-
 ### FUNCTION CALL
-# main()
+# main(10, 500)
