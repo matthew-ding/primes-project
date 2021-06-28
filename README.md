@@ -1,4 +1,4 @@
-# primes-project
+# primes-project-2020
 
 Paper can be found here: https://arxiv.org/abs/2010.05098
 
